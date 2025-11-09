@@ -154,13 +154,17 @@ jobs:
           else
             REF_NAME="${{ github.ref_name }}"
           fi
+          # 将标签名规范化为合法的容器标签：小写、非法字符替换为破折号
+          # 以匹配 docker/metadata-action 的行为，避免例如 feature/foo 这样的分支名导致标签非法
+          REF_NAME_SAFE=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9_.-]#-#g')
           REPO_LOWER="${{ needs.prepare.outputs.image_base }}"
           GHCR_IMAGE="${{ env.REGISTRY_GHCR }}/${REPO_LOWER}/nofx-${{ matrix.image_suffix }}"
 
-          docker buildx imagetools create -t "${GHCR_IMAGE}:${REF_NAME}" \
-            "${GHCR_IMAGE}:${REF_NAME}-amd64"
+          docker buildx imagetools create -t "${GHCR_IMAGE}:${REF_NAME_SAFE}" \
+            "${GHCR_IMAGE}:${REF_NAME_SAFE}-amd64"
 
-          if [[ "${{ inputs.create_latest }}" == "true" ]] && [[ "${REF_NAME}" =~ ^(refs/heads/)?(main|dev)$ ]]; then
+          # 仅在 main 分支且启用 create_latest 时创建 latest 标签
+          if [[ "${{ inputs.create_latest }}" == "true" ]] && [[ "${REF_NAME_SAFE}" == "main" ]]; then
             docker buildx imagetools create -t "${GHCR_IMAGE}:latest" \
-              "${GHCR_IMAGE}:${REF_NAME}-amd64"
+              "${GHCR_IMAGE}:${REF_NAME_SAFE}-amd64"
           fi

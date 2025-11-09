@@ -1,0 +1,76 @@
+name: Auto Build Upstream Main
+
+on:
+  schedule:
+    - cron: '0 */2 * * *' # 每 2 小时检查一次上游 main
+  repository_dispatch:
+    types: [nofx-main-updated]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: auto-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-22.04
+    outputs:
+      should_build: ${{ steps.decide.outputs.should_build }}
+      upstream_sha: ${{ steps.get_sha.outputs.sha }}
+    steps:
+      - name: Get latest upstream main SHA
+        id: get_sha
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = 'NoFxAiOS';
+            const repo = 'nofx';
+            const branch = 'main';
+            const res = await github.repos.getBranch({ owner, repo, branch });
+            core.setOutput('sha', res.data.commit.sha);
+
+      - name: Check cache (built SHA marker)
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: .cache/upstream-main-marker
+          key: upstream-main-${{ steps.get_sha.outputs.sha }}
+
+      - name: Decide whether to build
+        id: decide
+        run: |
+          if [[ "${{ steps.cache.outputs.cache-hit }}" == "true" && "${{ github.event_name }}" != "repository_dispatch" ]]; then
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check-upstream
+    if: needs.check-upstream.outputs.should_build == 'true'
+    uses: ./.github/workflows/docker-build-reusable.yml
+    with:
+      checkout_repository: NoFxAiOS/nofx
+      checkout_ref: main
+      registry_ghcr: ghcr.io
+      create_latest: true
+    secrets: inherit
+
+  mark-built:
+    needs: [check-upstream, build]
+    if: needs.check-upstream.outputs.should_build == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Write cache marker
+        run: |
+          mkdir -p .cache/upstream-main-marker
+          echo "${{ needs.check-upstream.outputs.upstream_sha }}" > .cache/upstream-main-marker/sha
+      - name: Save cache marker
+        uses: actions/cache@v3
+        with:
+          path: .cache/upstream-main-marker
+          key: upstream-main-${{ needs.check-upstream.outputs.upstream_sha }}
