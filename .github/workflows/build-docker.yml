@@ -1,4 +1,4 @@
-name: Build NOFX Upstream Images
+name: Build NOFX Docker
 
 on:
   workflow_dispatch:

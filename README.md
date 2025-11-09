@@ -17,7 +17,7 @@
 
 ## 模式 B：将本仓库作为可复用工作流在其他仓库调用
 
-在“调用方仓库”创建工作流 `.github/workflows/docker-build-reusable.yml`，示例参考 `inject_examples/consumer-workflow.yml`：
+在“调用方仓库”创建工作流 `.github/workflows/docker-build.yml`，示例参考 `inject_examples/consumer-workflow.yml`：
 
 ```yaml
 name: Build and Push via Reusable CI
@@ -34,7 +34,7 @@ permissions:
 
 jobs:
   build:
-uses: your-org/nofx-build/.github/workflows/docker-build-reusable.yml@main
+    uses: your-org/nofx-build/.github/workflows/docker-build.yml@main
     with:
       create_latest: true
       registry_ghcr: ghcr.io
@@ -69,7 +69,7 @@ uses: your-org/nofx-build/.github/workflows/docker-build-reusable.yml@main
 - 上游仓库需存在：
   - `./docker/Dockerfile.backend`
   - `./docker/Dockerfile.frontend`
-- 若路径不同，请修改 `.github/workflows/docker-build-reusable.yml` 的 `matrix` 中 `dockerfile` 字段以匹配实际路径。
+- 若路径不同，请修改 `.github/workflows/docker-build.yml` 的 `matrix` 中 `dockerfile` 字段以匹配实际路径。
 
 ## 常见问题
 
