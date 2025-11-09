@@ -27,11 +27,16 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const owner = 'NoFxAiOS';
-            const repo = 'nofx';
-            const branch = 'main';
-            const res = await github.repos.getBranch({ owner, repo, branch });
-            core.setOutput('sha', res.data.commit.sha);
+            try {
+              const owner = 'NoFxAiOS';
+              const repo = 'nofx';
+              const branch = 'main';
+              // Use Octokit REST API client in github-script v7
+              const res = await github.rest.repos.getBranch({ owner, repo, branch });
+              core.setOutput('sha', res.data.commit.sha);
+            } catch (error) {
+              core.setFailed(`Failed to get upstream branch SHA: ${error.message}`);
+            }
 
       - name: Check cache (built SHA marker)
         id: cache
