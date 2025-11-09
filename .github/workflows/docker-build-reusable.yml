@@ -51,7 +51,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Backend
+          # 后端
           - name: backend
             dockerfile: ./docker/Dockerfile.backend
             image_suffix: backend
@@ -64,7 +64,7 @@ jobs:
             platform: linux/arm64
             arch_tag: arm64
             runner: ubuntu-22.04
-          # Frontend
+          # 前端
           - name: frontend
             dockerfile: ./docker/Dockerfile.frontend
             image_suffix: frontend
@@ -114,8 +114,17 @@ jobs:
             type=semver,pattern={{version}},suffix=-${{ matrix.arch_tag }}
             type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.arch_tag }}
             type=sha,prefix={{branch}}-,suffix=-${{ matrix.arch_tag }}
-            # 当通过 checkout_repository/checkout_ref 构建上游时，增加一个以上游 ref 命名的 tag
-            type=raw,value=${{ inputs.checkout_repository != '' && inputs.checkout_ref || github.ref_name }},suffix=-${{ matrix.arch_tag }}
+
+      - name: Extract upstream ref tag metadata
+        if: inputs.checkout_repository != ''
+        id: meta_upstream
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_GHCR }}/${{ needs.prepare.outputs.image_base }}/nofx-${{ matrix.image_suffix }}
+          tags: |
+            # 为上游 ref 添加显式标签（例如 main 或 vX.Y.Z）
+            type=raw,value=${{ inputs.checkout_ref }},suffix=-${{ matrix.arch_tag }}
 
       - name: Build and push ${{ matrix.name }}-${{ matrix.arch_tag }} image
         uses: docker/build-push-action@v5
@@ -124,7 +133,9 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ steps.meta_upstream.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}-${{ matrix.arch_tag }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch_tag }}
@@ -150,7 +161,13 @@ jobs:
       - name: Create and push multi-arch manifest
         run: |
           # 优先使用上游的 checkout_ref 作为标签名，否则回退到调用方的 ref_name
-          REF_NAME="${{ inputs.checkout_repository != '' && inputs.checkout_ref != '' ? inputs.checkout_ref : github.ref_name }}"
+          CHECKOUT_REPO="${{ inputs.checkout_repository }}"
+          CHECKOUT_REF="${{ inputs.checkout_ref }}"
+          if [[ -n "$CHECKOUT_REPO" && -n "$CHECKOUT_REF" ]]; then
+            REF_NAME="$CHECKOUT_REF"
+          else
+            REF_NAME="${{ github.ref_name }}"
+          fi
           REPO_LOWER="${{ needs.prepare.outputs.image_base }}"
           GHCR_IMAGE="${{ env.REGISTRY_GHCR }}/${REPO_LOWER}/nofx-${{ matrix.image_suffix }}"
 
