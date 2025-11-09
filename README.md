@@ -8,33 +8,17 @@ NOFX 是通用架构的 AI交易操作系统（Agentic Trading OS）。我们已
 
 ## Docker 构建
 
-每 2 小时检查一次官方main分支自动构建镜像 `NoFxAiOS/nofx@main`；
-不定时手动构建 dev 分支镜像 `NoFxAiOS/nofx@dev`。
+每 2 小时检查一次官方 `main` 分支自动构建镜像 `NoFxAiOS/nofx@main`；
+不定时手动构建 `dev` 分支镜像 `NoFxAiOS/nofx@dev`。
 
 ## 构建环境与架构
 
 - 运行器：`ubuntu-22.04`
-- 架构：`linux/amd64`（仅构建x86架构， 不支持`arm64`）。
+- 架构：`linux/amd64`（仅构建 `x86` 架构，不支持 `arm64`）。
 
-## 运行时要求（加密与端口）
+## Compose 部署启动示例
 
-- 必需环境变量：
-  - `DATA_ENCRYPTION_KEY`：32 字节随机值的 Base64（AES-256-GCM）。
-  - `JWT_SECRET`：建议 64 字节随机值的 Base64（JWT 认证密钥）。
-- 可选环境变量：
-  - `NOFX_TIMEZONE`（默认 `Asia/Shanghai`），`AI_MAX_TOKENS` 等。
-- 端口：
-  - 后端默认映射 `${NOFX_BACKEND_PORT:-8080}:8080`；
-  - 前端默认映射 `${NOFX_FRONTEND_PORT:-3000}:80`。
-- 密钥与挂载：
-  - 挂载目录 `./secrets:/app/secrets:ro`，包含 `rsa_key` 与 `rsa_key.pub`；
-  - 生成密钥（Linux/macOS）：
-    - 执行 `./scripts/setup_encryption.sh` 生成 `rsa_key` 与 `rsa_key.pub`；
-    - 官方文档 https://github.com/NoFxAiOS/nofx/blob/dev/scripts/ENCRYPTION_README.md
-
-## Compose 启动示例
-
-必须先准备好下列目录与文件：
+1. 先准备好下列目录与文件：
 
 ```yml
 # 必要文件,参考 https://github.com/NoFxAiOS/nofx/blob/dev/config.json.example
@@ -47,35 +31,64 @@ NOFX 是通用架构的 AI交易操作系统（Agentic Trading OS）。我们已
 - ./decision_logs
 # 使用官方的 https://github.com/NoFxAiOS/nofx/tree/dev/prompts
 - ./prompts
-# 参考上面 ## 运行时要求（加密与端口） 生成 RSA 密钥的说明
+# 参考本仓库 ## compose必要环境配置（Linux） 密钥与挂载 部分
 - ./secrets
 ```
+
+2. 选择你要部署的分支（main 或 dev）
 
 使用本仓库的 `compose.yml` 启动main分支镜像：
 ```bash
 # 从本仓库拉取最新的 compose.yml（与仓库文件名一致）
 curl -o compose.yml https://raw.githubusercontent.com/34892002/nofx-build/main/compose.yml
-# 启动服务
+# 修改compose.yml中的环境变量配置，参考 compose必要环境配置（Linux）
+# 最后启动服务
 docker compose up -d
 ```
 
-
-## 标签策略
-
-- 发布位置：
-  - `ghcr.io/<你的账户或组织>/<本仓库名>/nofx-backend`
-  - `ghcr.io/<你的账户或组织>/<本仓库名>/nofx-frontend`
-- 仅保留分支别名两类：
-- `main`：上游 `main` 自动构建的最新版本；
-- `dev`：上游 `dev` 手动/指定构建的最新版本。
-- 不再创建全局 `latest` 或其它派生标签（如 `main-amd64`、`main-<sha>-amd64`）。
 
 使用本仓库的 `compose_dev.yml` 启动dev分支镜像：
 ```bash
 # 从本仓库拉取最新的 compose_dev.yml（与仓库文件名一致）
 curl -o compose_dev.yml https://raw.githubusercontent.com/34892002/nofx-build/main/compose_dev.yml
-# 启动服务
+# 修改compose_dev.yml中的环境变量配置，参考 compose必要环境配置（Linux）
+# 最后启动服务
 docker compose -f compose_dev.yml up -d
+```
+
+## compose必要环境配置（Linux）
+> 提示：请勿将 `./secrets` 目录提交到仓库，建议通过 `.gitignore` 忽略。
+- `必填配置`：
+  - 密钥：
+    - 加密密钥生成脚本[官方文档](https://github.com/NoFxAiOS/nofx/blob/dev/scripts/ENCRYPTION_README.md)
+    - 执行 `./scripts/setup_encryption.sh` 生成secrets目录，里面包含 `rsa_key` 与 `rsa_key.pub`；
+  - 挂载密钥目录 `./secrets:/app/secrets:ro`，包含 `rsa_key` 与 `rsa_key.pub`；
+  - 数据库加密串 `DATA_ENCRYPTION_KEY`：32 字节随机 Base64。
+    - 运行命令生成：`openssl rand -base64 32`
+  - JWT 认证密钥 `JWT_SECRET`：64 字节随机 Base64。
+    - 运行命令生成：`openssl rand -base64 64`
+
+- 端口：
+  - 后端默认映射 `${NOFX_BACKEND_PORT:-8080}:8080`；
+  - 前端默认映射 `${NOFX_FRONTEND_PORT:-3000}:80`。
+
+- 其他：
+  - `NOFX_TIMEZONE`（默认 `Asia/Shanghai`）
+  - `AI_MAX_TOKENS`（默认 `4000`）
+
+
+## 标签策略
+> 不推荐直接pull 镜像使用，建议通过compose部署。
+分支别名两类：
+- `main`：上游 `main` 自动构建的最新版本；
+``` bash
+docker pull ghcr.io/34892002/nofx-build/nofx-backend:main
+docker pull ghcr.io/34892002/nofx-build/nofx-frontend:main
+```
+- `dev`：上游 `dev` 手动/指定构建的最新版本。
+``` bash
+docker pull ghcr.io/34892002/nofx-build/nofx-backend:dev
+docker pull ghcr.io/34892002/nofx-build/nofx-frontend:dev
 ```
 
 ## 常见问题
