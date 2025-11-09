@@ -96,10 +96,8 @@ jobs:
           images: |
             ${{ env.REGISTRY_GHCR }}/${{ needs.prepare.outputs.image_base }}/nofx-${{ matrix.image_suffix }}
           tags: |
-            type=ref,event=branch,suffix=-${{ matrix.arch_tag }}
-            type=semver,pattern={{version}},suffix=-${{ matrix.arch_tag }}
-            type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.arch_tag }}
-            type=sha,prefix={{branch}}-,suffix=-${{ matrix.arch_tag }}
+            # 仅使用分支名作为标签（不包含架构后缀/sha/semver）
+            type=ref,event=branch
 
       - name: Extract upstream ref tag metadata
         if: inputs.checkout_repository != ''
@@ -110,7 +108,7 @@ jobs:
             ${{ env.REGISTRY_GHCR }}/${{ needs.prepare.outputs.image_base }}/nofx-${{ matrix.image_suffix }}
           tags: |
             # 为上游 ref 添加显式标签（例如 main 或 vX.Y.Z）
-            type=raw,value=${{ inputs.checkout_ref }},suffix=-${{ matrix.arch_tag }}
+            type=raw,value=${{ inputs.checkout_ref }}
 
       - name: Build and push ${{ matrix.name }}-${{ matrix.arch_tag }} image
         uses: docker/build-push-action@v5
@@ -119,9 +117,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           push: true
-          tags: |
-            ${{ steps.meta.outputs.tags }}
-            ${{ steps.meta_upstream.outputs.tags }}
+          tags: ${{ inputs.checkout_repository != '' && steps.meta_upstream.outputs.tags || steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}-${{ matrix.arch_tag }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch_tag }}
@@ -160,11 +156,9 @@ jobs:
           REPO_LOWER="${{ needs.prepare.outputs.image_base }}"
           GHCR_IMAGE="${{ env.REGISTRY_GHCR }}/${REPO_LOWER}/nofx-${{ matrix.image_suffix }}"
 
-          docker buildx imagetools create -t "${GHCR_IMAGE}:${REF_NAME_SAFE}" \
-            "${GHCR_IMAGE}:${REF_NAME_SAFE}-amd64"
+          # 为每个分支只创建 `<branch>` 的统一标签
+          BRANCH_TAG="${REF_NAME_SAFE}"
+          docker buildx imagetools create -t "${GHCR_IMAGE}:${BRANCH_TAG}" \
+            "${GHCR_IMAGE}:${REF_NAME_SAFE}"
 
-          # 仅在 main 分支且启用 create_latest 时创建 latest 标签
-          if [[ "${{ inputs.create_latest }}" == "true" ]] && [[ "${REF_NAME_SAFE}" == "main" ]]; then
-            docker buildx imagetools create -t "${GHCR_IMAGE}:latest" \
-              "${GHCR_IMAGE}:${REF_NAME_SAFE}-amd64"
-          fi
+          # 不再创建全局 `latest`，仅保留 `main` 与 `dev` 等分支别名
