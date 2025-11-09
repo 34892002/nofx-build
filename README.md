@@ -1,82 +1,83 @@
-# NOFX 上游镜像构建与发布（GHCR）
+# NOFX 镜像构建与发布
 
-本仓库提供两种使用方式：
-- 模式 A：直接在本仓库手动构建并推送上游 `NoFxAiOS/nofx` 的镜像到 GHCR。
-- 模式 B：作为“可复用工作流”被其他仓库调用，构建并推送该仓库或指定上游仓库的镜像到 GHCR。
+NOFX 是通用架构的 AI交易操作系统（Agentic Trading OS）。我们已在加密市场打通"多智能体决策 → 统一风控 → 低延迟执行 → 真实/纸面账户复盘"的闭环，正按同一技术栈扩展到股票、期货、期权、外汇等所有市场。 官方仓库：[NoFxAiOS/nofx](https://github.com/NoFxAiOS/nofx)
 
-## 快速开始
+本仓库支持：
+- 手动或自动构建上游 `NoFxAiOS/nofx` 的 `backend` 与 `frontend` 镜像；
+- 作为“可复用工作流”在其他仓库中调用，构建并推送到 [GHCR](https://github.com/users/34892002/packages?repo_name=nofx-build)。
 
-- 仓库设置 → `Settings → Actions → General`：将 `Workflow permissions` 设置为 `Read and write permissions`。
-- 确认你所在的组织或账户允许使用 GitHub Packages（GHCR）。镜像会发布到 `ghcr.io` 下。
+## Docker 构建
 
-## 模式 A：在本仓库手动构建上游 NOFX
+每 2 小时检查一次官方main分支自动构建镜像 `NoFxAiOS/nofx@main`；
+不定时手动构建 dev 分支镜像 `NoFxAiOS/nofx@dev`。
 
-- 进入仓库页面 → `Actions` → 选择工作流 `Build NOFX Upstream Images`。
-- 点击 `Run workflow`，填写上游 `ref`（例如 `main` 或 `vX.Y.Z`）。
-- 工作流将检出上游 `NoFxAiOS/nofx` 并构建 `backend` 和 `frontend` 镜像，推送到 GHCR。
+## 构建环境与架构
 
-## 模式 B：将本仓库作为可复用工作流在其他仓库调用
+- 运行器：`ubuntu-22.04`
+- 架构：`linux/amd64`（仅构建x86架构， 不支持`arm64`）。
 
-在“调用方仓库”创建工作流 `.github/workflows/docker-build.yml`，示例参考 `inject_examples/consumer-workflow.yml`：
+## 运行时要求（加密与端口）
 
-```yaml
-name: Build and Push via Reusable CI
+- 必需环境变量：
+  - `DATA_ENCRYPTION_KEY`：32 字节随机值的 Base64（AES-256-GCM）。
+  - `JWT_SECRET`：建议 64 字节随机值的 Base64（JWT 认证密钥）。
+- 可选环境变量：
+  - `NOFX_TIMEZONE`（默认 `Asia/Shanghai`），`AI_MAX_TOKENS` 等。
+- 端口：
+  - 后端默认映射 `${NOFX_BACKEND_PORT:-8080}:8080`；
+  - 前端默认映射 `${NOFX_FRONTEND_PORT:-3000}:80`。
+- 密钥与挂载：
+  - 挂载目录 `./secrets:/app/secrets:ro`，包含 `rsa_key` 与 `rsa_key.pub`；
+  - 生成密钥（Linux/macOS）：
+    - 执行 `./scripts/setup_encryption.sh` 生成 `rsa_key` 与 `rsa_key.pub`；
+    - 官方文档 https://github.com/NoFxAiOS/nofx/blob/dev/scripts/ENCRYPTION_README.md
 
-on:
-  push:
-    branches: [main, dev]
-    tags: ['v*']
-  workflow_dispatch:
+## Compose 启动示例
 
-permissions:
-  contents: read
-  packages: write
+必须先准备好下列目录与文件：
 
-jobs:
-  build:
-    uses: your-org/nofx-build/.github/workflows/docker-build.yml@main
-    with:
-      create_latest: true
-      registry_ghcr: ghcr.io
-      # 如需构建上游 NOFX：
-      checkout_repository: NoFxAiOS/nofx
-      checkout_ref: main
-    # 如果组织策略允许：
-    # secrets: inherit
+```yml
+# 必要文件,参考 https://github.com/NoFxAiOS/nofx/blob/dev/config.json.example
+- ./config.json
+# 数据库，新安装时手动创建一个空文件
+- ./config.db
+# 邀请码，随便填写，例子: atxcp9
+- ./beta_codes.txt
+# 新安装时手动创建一个目录
+- ./decision_logs
+# 使用官方的 https://github.com/NoFxAiOS/nofx/tree/dev/prompts
+- ./prompts
+# 参考上面 ## 运行时要求（加密与端口） 生成 RSA 密钥的说明
+- ./secrets
 ```
 
-将 `your-org` 替换为你的 GitHub 组织或用户名。可根据需要调整触发器。
+使用本仓库的 `compose.yml` 启动main分支镜像：
+```bash
+# 从本仓库拉取最新的 compose.yml（与仓库文件名一致）
+curl -o compose.yml https://raw.githubusercontent.com/34892002/nofx-build/main/compose.yml
+# 启动服务
+docker compose up -d
+```
 
-## 镜像与标签
+
+## 标签策略
 
 - 发布位置：
   - `ghcr.io/<你的账户或组织>/<本仓库名>/nofx-backend`
   - `ghcr.io/<你的账户或组织>/<本仓库名>/nofx-frontend`
-- 标签组成：
-  - 上游 `checkout_ref`（当以上游构建时，如 `main`、`vX.Y.Z`）
-  - 分支标签（基于调用方仓库的分支）
-  - 语义化版本（如可解析）
-  - 短 SHA 标签
-  - 在 `main` 或 `dev` 分支且 `create_latest=true` 时，额外创建 `latest`
+- 仅保留分支别名两类：
+- `main`：上游 `main` 自动构建的最新版本；
+- `dev`：上游 `dev` 手动/指定构建的最新版本。
+- 不再创建全局 `latest` 或其它派生标签（如 `main-amd64`、`main-<sha>-amd64`）。
 
-## 构建环境
-
-- 运行器：`ubuntu-22.04`
-- 多架构：使用 Docker Buildx + QEMU 构建 `linux/amd64` 与 `linux/arm64`
-
-## 前置条件与路径约定
-
-- 上游仓库需存在：
-  - `./docker/Dockerfile.backend`
-  - `./docker/Dockerfile.frontend`
-- 若路径不同，请修改 `.github/workflows/docker-build.yml` 的 `matrix` 中 `dockerfile` 字段以匹配实际路径。
+使用本仓库的 `compose_dev.yml` 启动dev分支镜像：
+```bash
+# 从本仓库拉取最新的 compose_dev.yml（与仓库文件名一致）
+curl -o compose_dev.yml https://raw.githubusercontent.com/34892002/nofx-build/main/compose_dev.yml
+# 启动服务
+docker compose -f compose_dev.yml up -d
+```
 
 ## 常见问题
 
-- GHCR 推送失败：
-  - 检查 `Permissions → packages: write` 是否设置在触发工作流的仓库中。
-  - 确认使用的是组织或账户下允许推送 GHCR 的 `GITHUB_TOKEN`。
-- 标签不符合预期：
-  - 以上游构建时，会增加一个以 `checkout_ref` 命名的标签；其他标签来自调用方的分支、语义化版本与 SHA。
-- 仅 GHCR 发布：
-  - 本工作流不包含任何 Docker Hub 登录或推送步骤。
+不定时更新脚本，有问题请提 [issue](https://github.com/34892002/nofx-build/issues)。
