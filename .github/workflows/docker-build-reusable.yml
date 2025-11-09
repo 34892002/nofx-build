@@ -150,7 +150,7 @@ jobs:
       - name: Create and push multi-arch manifest
         run: |
           # 优先使用上游的 checkout_ref 作为标签名，否则回退到调用方的 ref_name
-          REF_NAME="${{ inputs.checkout_repository != '' && inputs.checkout_ref || github.ref_name }}"
+          REF_NAME="${{ inputs.checkout_repository != '' && inputs.checkout_ref != '' ? inputs.checkout_ref : github.ref_name }}"
           REPO_LOWER="${{ needs.prepare.outputs.image_base }}"
           GHCR_IMAGE="${{ env.REGISTRY_GHCR }}/${REPO_LOWER}/nofx-${{ matrix.image_suffix }}"
 
@@ -158,8 +158,7 @@ jobs:
             "${GHCR_IMAGE}:${REF_NAME}-amd64" \
             "${GHCR_IMAGE}:${REF_NAME}-arm64"
 
-          if [[ "${{ inputs.create_latest }}" == "true" ]] && \
-             { [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/dev" ]]; }; then
+          if [[ "${{ inputs.create_latest }}" == "true" ]] && [[ "${REF_NAME}" =~ ^(refs/heads/)?(main|dev)$ ]]; then
             docker buildx imagetools create -t "${GHCR_IMAGE}:latest" \
               "${GHCR_IMAGE}:${REF_NAME}-amd64" \
               "${GHCR_IMAGE}:${REF_NAME}-arm64"
