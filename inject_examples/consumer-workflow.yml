@@ -6,21 +6,21 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
-# 这里的权限会应用到可复用工作流中使用的 GITHUB_TOKEN
 permissions:
   contents: read
   packages: write
 
 jobs:
   build:
-    uses: your-org/reusable-ci/.github/workflows/docker-build.yml@main
+    uses: your-org/nofx-build/.github/workflows/docker-build-reusable.yml@main
     with:
       create_latest: true
       registry_ghcr: ghcr.io
-    # 选一种方式传递密钥：
-    # 方案 A：全部继承
+      # 如果不想 Fork 上游，直接指定要构建的仓库与分支/标签：
+      checkout_repository: NoFxAiOS/nofx
+      checkout_ref: main
+    # 选择其一：
     # secrets: inherit
-    # 方案 B：点对点映射（更可控）
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

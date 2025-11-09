@@ -1,0 +1,187 @@
+name: Reusable Docker Build
+
+on:
+  workflow_call:
+    inputs:
+      registry_ghcr:
+        description: 'Registry for GHCR'
+        required: false
+        type: string
+        default: ghcr.io
+      create_latest:
+        description: 'Also tag latest for main/dev'
+        required: false
+        type: boolean
+        default: true
+      checkout_repository:
+        description: 'Repository to checkout and build (e.g. NoFxAiOS/nofx)'
+        required: false
+        type: string
+        default: ''
+      checkout_ref:
+        description: 'Ref of repository to checkout (e.g. main or vX.Y.Z)'
+        required: false
+        type: string
+        default: 'main'
+
+# 使用调用方工作流的令牌权限
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY_GHCR: ${{ inputs.registry_ghcr }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      image_base: ${{ steps.lowercase.outputs.image_base }}
+    steps:
+      - name: Convert repository name to lowercase
+        id: lowercase
+        run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image_base=${REPO_LOWER}" >> $GITHUB_OUTPUT
+
+  build-and-push:
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Backend
+          - name: backend
+            dockerfile: ./docker/Dockerfile.backend
+            image_suffix: backend
+            platform: linux/amd64
+            arch_tag: amd64
+            runner: ubuntu-22.04
+          - name: backend
+            dockerfile: ./docker/Dockerfile.backend
+            image_suffix: backend
+            platform: linux/arm64
+            arch_tag: arm64
+            runner: ubuntu-22.04
+          # Frontend
+          - name: frontend
+            dockerfile: ./docker/Dockerfile.frontend
+            image_suffix: frontend
+            platform: linux/amd64
+            arch_tag: amd64
+            runner: ubuntu-22.04
+          - name: frontend
+            dockerfile: ./docker/Dockerfile.frontend
+            image_suffix: frontend
+            platform: linux/arm64
+            arch_tag: arm64
+            runner: ubuntu-22.04
+    steps:
+      - name: Checkout specified upstream repository
+        if: inputs.checkout_repository != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.checkout_repository }}
+          ref: ${{ inputs.checkout_ref }}
+          fetch-depth: 0
+
+      - name: Checkout caller repository
+        if: inputs.checkout_repository == ''
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU for cross-arch builds
+        uses: docker/setup-qemu-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_GHCR }}/${{ needs.prepare.outputs.image_base }}/nofx-${{ matrix.image_suffix }}
+          tags: |
+            type=ref,event=branch,suffix=-${{ matrix.arch_tag }}
+            type=semver,pattern={{version}},suffix=-${{ matrix.arch_tag }}
+            type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.arch_tag }}
+            type=sha,prefix={{branch}}-,suffix=-${{ matrix.arch_tag }}
+            # 当通过 checkout_repository/checkout_ref 构建上游时，增加一个以上游 ref 命名的 tag
+            type=raw,value=${{ inputs.checkout_repository != '' && inputs.checkout_ref || github.ref_name }},suffix=-${{ matrix.arch_tag }}
+
+      - name: Build and push ${{ matrix.name }}-${{ matrix.arch_tag }} image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}-${{ matrix.arch_tag }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch_tag }}
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+
+  create-manifest:
+    needs: [prepare, build-and-push]
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        image_suffix: [backend, frontend]
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Create and push multi-arch manifest
+        run: |
+          # 优先使用上游的 checkout_ref 作为标签名，否则回退到调用方的 ref_name
+          REF_NAME="${{ inputs.checkout_repository != '' && inputs.checkout_ref || github.ref_name }}"
+          REPO_LOWER="${{ needs.prepare.outputs.image_base }}"
+          GHCR_IMAGE="${{ env.REGISTRY_GHCR }}/${REPO_LOWER}/nofx-${{ matrix.image_suffix }}"
+
+          docker buildx imagetools create -t "${GHCR_IMAGE}:${REF_NAME}" \
+            "${GHCR_IMAGE}:${REF_NAME}-amd64" \
+            "${GHCR_IMAGE}:${REF_NAME}-arm64"
+
+          if [[ "${{ inputs.create_latest }}" == "true" ]] && \
+             { [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/dev" ]]; }; then
+            docker buildx imagetools create -t "${GHCR_IMAGE}:latest" \
+              "${GHCR_IMAGE}:${REF_NAME}-amd64" \
+              "${GHCR_IMAGE}:${REF_NAME}-arm64"
+          fi
+
+          if [[ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]]; then
+            DOCKERHUB_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/nofx-${{ matrix.image_suffix }}"
+            docker buildx imagetools create -t "${DOCKERHUB_IMAGE}:${REF_NAME}" \
+              "${DOCKERHUB_IMAGE}:${REF_NAME}-amd64" \
+              "${DOCKERHUB_IMAGE}:${REF_NAME}-arm64" || true
+          fi
