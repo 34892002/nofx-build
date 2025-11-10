@@ -91,6 +91,16 @@ docker pull ghcr.io/34892002/nofx-build/nofx-backend:dev
 docker pull ghcr.io/34892002/nofx-build/nofx-frontend:dev
 ```
 
+## dev分支部署问题
+1. 注册账号密码问题
+  - 多输入几次，直到成功注册。
+2. 启用WAL模式失败: database disk image is malformed (11)
+  - 解决方法：备份原 `./config.db` 数据库文件。
+  - 使用本仓库的`create_config_db.ts`得到一个empty.db改名为config.db，上传即可。
+  - （不建议）懒人直接用本仓库的`config.db`文件替换即可。
+
+
+
 ## 常见问题
 
 不定时更新脚本，有问题请提 [issue](https://github.com/34892002/nofx-build/issues)。
