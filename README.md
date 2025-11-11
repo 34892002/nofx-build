@@ -5,6 +5,7 @@ NOFX 是通用架构的 AI交易操作系统（Agentic Trading OS）。我们已
 本仓库支持：
 - 手动或自动构建上游 `NoFxAiOS/nofx` 的 `backend` 与 `frontend` 镜像；
 - 作为“可复用工作流”在其他仓库中调用，构建并推送到 [GHCR](https://github.com/users/34892002/packages?repo_name=nofx-build)。
+- 新增z佬的z-dev-v2分支编译，官方转帖，贴文表示主力分支将使用z-dev-v2开发[x帖文](https://x.com/the_dev_z/status/1988142704803672110)，[分支仓库](https://github.com/the-dev-z/nofx/commits/z-dev-v2/)
 
 ## Docker 构建
 
@@ -91,8 +92,11 @@ docker pull ghcr.io/34892002/nofx-build/nofx-backend:dev
 docker pull ghcr.io/34892002/nofx-build/nofx-frontend:dev
 ```
 
+## z-dev-v2分支部署问题
+> 镜像更新时间：2025-11-11
+
 ## dev分支部署问题
-> 镜像更新时间：2025-11-10
+> 镜像更新时间：2025-11-11
 1. 注册账号密码问题
   - 多输入几次，直到成功注册。
 2. 启用WAL模式失败: database disk image is malformed (11)
