@@ -1,4 +1,4 @@
-name: Build NOFX Docker
+name: Build Z-DEV-2 Docker
 
 on:
   workflow_dispatch:
