@@ -1,4 +1,4 @@
-name: Build Z-DEV-2 Docker
+name: Build Z-DEV-v2 Docker
 
 on:
   workflow_dispatch:
