@@ -10,7 +10,7 @@ on:
       ref:
         description: "Upstream ref to build (e.g. main or dev)"
         required: true
-        default: "z-dev-2"
+        default: "z-dev-v2"
 
 # Ensure the caller has sufficient token permissions
 permissions:
