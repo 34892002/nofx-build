@@ -58,7 +58,9 @@ docker compose -f compose_dev.yml up -d
 ```
 
 ## compose必要环境配置（Linux）
-> 提示：请勿将 `./secrets` 目录提交到仓库，建议通过 `.gitignore` 忽略。
+> 这里要手动修改下载好的compose.yml、compose_dev.yml 文件里对应配置项，需要对compose有一些了解
+
+提示：请勿将 `./secrets` 目录提交到仓库，建议通过 `.gitignore` 忽略。
 - `必填配置`：
   - 密钥：
     - 加密密钥生成脚本[官方文档](https://github.com/NoFxAiOS/nofx/blob/dev/scripts/ENCRYPTION_README.md)
@@ -93,10 +95,10 @@ docker pull ghcr.io/34892002/nofx-build/nofx-frontend:dev
 ```
 
 ## z-dev-v2分支部署问题
-> 镜像更新时间：2025-11-11
+> 镜像更新时间：2025-11-14
 
 ## dev分支部署问题
-> 镜像更新时间：2025-11-11
+> 镜像更新时间：2025-11-14
 1. 注册账号密码问题
   - 多输入几次，直到成功注册。
 2. 启用WAL模式失败: database disk image is malformed (11)
