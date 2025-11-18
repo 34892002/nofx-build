@@ -95,10 +95,10 @@ docker pull ghcr.io/34892002/nofx-build/nofx-frontend:dev
 ```
 
 ## z-dev-v2分支部署问题
-> 镜像更新时间：2025-11-14
+> 镜像更新时间：2025-11-17
 
 ## dev分支部署问题
-> 镜像更新时间：2025-11-14
+> 镜像更新时间：2025-11-17
 1. 注册账号密码问题
   - 多输入几次，直到成功注册。
 2. 启用WAL模式失败: database disk image is malformed (11)
